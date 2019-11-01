@@ -55,7 +55,7 @@ for (i in 1:nSNP){
   ct[i,]<-table(xg[,i]) 
 }
 
-xg
+# xg
 ct
 
 #Gráfico de barras
@@ -207,5 +207,115 @@ anova(lm(y12~xaL1*xdL1*xaL2*xdL2))
 #### Ajustar modelos de regressão logística na análise do fenótipo binário
 #### Considerar modelos Unilocos e Munltilocos (Bilocos, Seleção de variáveis)
 #### Construir Gráficos Manhattan para modelos SEM e COM efeitos de covariáveis.
+```{r echo=TRUE, message=TRUE, warning=FALSE, paged.print=FALSE}
+# phen1[,2]~xg[,1]+glu
+tb1<-table(phen1d,xg[,1]) #tabela de contingência para dados de SNP1
+tb1
+phat1 <- c(tb1[2,1]/sum(tb1[,1]),tb1[2,2]/sum(tb1[,2]),tb1[2,3]/sum(tb1[,3]))
+phat1 #estimativas de P(doença|genótipo do SNP1)
+fit1.rl<-glm(phen1d ~ as.factor(xg[,1]), family=binomial(link="logit"))
+summary(fit1.rl)
+confint(fit1.rl) #IC para os betas
+conf1 <- confint(fit1.rl)
+#IC para o odds ratio
+lior.Aa <- exp(conf1[2,1])
+lsor.Aa <- exp(conf1[2,2])
+c(lior.Aa,lsor.Aa)
+
+lior.AA <- exp(conf1[3,1])
+lsor.AA <- exp(conf1[3,2])
+c(lior.AA,lsor.AA)
+#Construindo o gráfico da Probabilidade(Doença) em função do genótipo
+#Visualizando o efeito linear
+xgg <- c(0,1,2)
+plot(xgg,phat1, xlab="XG1", ylab="Pr(D)",pch=16)
+xgs<-seq(0,2,0.01)
+fit1.rl.linear<-glm(phen1d ~ xg[,1], family=binomial(link="logit"))
+summary(fit1.rl.linear)
+fitmod<-(exp(0.02066-0.03163*xgs))/(1+exp(0.02066-0.03163*xgs))
+lines(xgs,fitmod)
+
+##ROC curve
+require(Epi)
+ROC(form=phen1d ~factor(xg[,1]), plot="ROC")
+ROC(form=phen1d ~ (xg[,1]), plot="ROC")
+
+# lm(phen2[,2]~xg[,1]+sexo)
+tb2<-table(phen2d,xg[,1]) #tabela de contingência para dados de SNP1
+tb2
+phat2 <- c(tb2[2,1]/sum(tb2[,1]),tb2[2,2]/sum(tb2[,2]),tb2[2,3]/sum(tb2[,3]))
+phat2 #estimativas de P(doença|genótipo do SNP1)
+fit2.rl<-glm(phen2d ~ as.factor(xg[,1]), family=binomial(link="logit"))
+summary(fit2.rl)
+confint(fit2.rl) #IC para os betas
+conf2 <- confint(fit2.rl)
+#IC para o odds ratio
+lior.Aa2 <- exp(conf2[2,1])
+lsor.Aa2 <- exp(conf2[2,2])
+c(lior.Aa2,lsor.Aa2)
+
+lior.AA2 <- exp(conf2[3,1])
+lsor.AA2 <- exp(conf2[3,2])
+c(lior.AA2,lsor.AA2)
+#Construindo o gráfico da Probabilidade(Doença) em função do genótipo
+#Visualizando o efeito linear
+xgg <- c(0,1,2)
+plot(xgg,phat2, xlab="XG1", ylab="Pr(D)",pch=16)
+xgs<-seq(0,2,0.01)
+fit2.rl.linear<-glm(phen2d ~ (xg[,2]), family=binomial(link="logit"))
+summary(fit2.rl.linear)
+fitmod<-(exp(0.05134 -0.05312*xgs))/(1+exp(0.05134 -0.05312*xgs))
+lines(xgs,fitmod)
+
+##ROC curve
+require(Epi)
+ROC(form=phen2d ~factor(xg[,2]), plot="ROC")
+ROC(form=phen2d ~(xg[,2]), plot="ROC")
+
+fiti.rl<-glm(phen2d ~ as.factor(xg[,1])*as.factor(xg[,2]), family=binomial(link="logit"))
+summary(fiti.rl)
 
 
+# lm(y12~xaL1*xdL1*xaL2*xdL2)
+require(car)
+x1a<-recode(xg[,1], "0=(-1);1=0;2=1")
+x1d<-Recode(xg[,1], "0=0;1=1;2=0")
+x2a<-Recode(xg[,2], "0=(-1);1=0;2=1")
+x2d<-Recode(xg[,2], "0=0;1=1;2=0")
+x12aa<-x1a*x2a
+x12ad<-x1a*x2d
+x12da<-x1d*x2a
+x12dd<-x1d*x2d
+
+xc <- cbind(x1a,x1d,x2a,x2d,x12aa,x12ad,x12da,x12dd)
+# xc
+
+fit1ad<-glm(y12d ~ x1a + x1d, family=binomial(link="logit"))
+summary(fit1ad)
+
+fit2ad<-glm(y12d ~ x2a +x2d, family=binomial(link="logit"))
+summary(fit2ad)
+
+fitiad<-glm(y12d ~ x1a + x1d +x2a +x2d + x12aa + x12ad + x12da + x12dd, family=binomial(link="logit"))
+summary(fitiad)
+
+library(stepPlr)
+fitip <- plr(xc,y12d)
+summary(fitip)
+
+xad<-cbind(x1a,x1d,x2a,x2d) 
+#Na seleção de variáveis basta entrar com as var aditivas
+# As interações são automaticamente incluídas no modelo
+
+fitstep1 <- step.plr(xad,y12d,trace=TRUE, cp=2, lambda=1)
+fitstep1 
+#Verifique as variáveis excluídas e selecionadas
+summary(fitstep1)
+
+library(qqman)
+tail(gwasResults)
+s<-summary(fit1ad)
+gwas<-data.frame(SNP=c(1:3),CHR=c(1),BP=c(1:3),P=c(summary(fit1ad)$coefficients[2,4],
+                summary(fit2ad)$coefficients[2,4],summary(fitiad)$coefficients[2,4]))
+manhattan(gwas)
+```
