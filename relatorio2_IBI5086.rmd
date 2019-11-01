@@ -1,0 +1,211 @@
+---
+title: "Relatório 2 IBI5086 - 5/11/2019"
+subtitle: "Vinícius jardim Carvalho - nUSP 6802691"
+output:
+  pdf_document: null
+  fig_caption: yes
+  includes:
+    in_header: mystyles.sty
+  keep_tex: yes
+  html_document:
+    df_print: paged
+  toc: yes
+  toc_depth: '2'
+---
+
+# IBI5086 - Projeto 2
+## Efeitos genéticos
+
+## 1. Gerar dados de genótipos de 10 Marcadores (codominantes, sob EHW e Eq.L):
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+rm(list=ls(all=TRUE)) # removendo todos os objetos criados anteriormente
+search()
+
+# carregando pacotes
+library("moments")
+library(lattice)
+library(car)
+# library(BHH2)
+require(fBasics)
+```
+
+
+
+Gerar dados de fenótipos quantitativos (pela mistura de normais):
+
+```{r echo=TRUE, message=TRUE, warning=FALSE, paged.print=FALSE}
+### Gerar dados genotípicos de 10 marcadores dialélicos (SNPs)
+# Marcadores em Eq. de Hardy Weinberg e em Eq. de Ligação
+# Gerar dados genotípicos pela Bin(n=2,p=P(A))
+# vetor de probab. de ocorrência do alelo de risco A para cada loco
+set.seed(13)
+nSNP<-10
+p <- sample(seq(0.2,0.8,0.1),nSNP,replace = T)
+n <- 200
+# Matriz xg: cada coluna com os dados simulados (X=0,1,2 alelos de risco)
+# Matriz ct contém as frequências de 0, 1 e 2 para cada marcador 
+xg<- matrix(NA,n,nSNP)
+colnames(xg)<-paste("snp",1:nSNP,sep="")
+ct<-matrix(NA, nSNP, 3)
+colnames(ct)<-c(0,1,2)
+rownames(ct)<-paste("snp",1:nSNP,sep="")
+for (i in 1:nSNP){
+  set.seed(i+45)
+  xg[,i] <- rbinom(n,2,p[i])
+  ct[i,]<-table(xg[,i]) 
+}
+
+xg
+ct
+
+#Gráfico de barras
+par(mfrow=c(2,5))
+for (i in 1:nSNP){
+  barplot(summary(as.factor(xg[,i])),main=p[i])
+}
+```
+## Gerar dados de uma covariável (X1: quantitativa) e uma variável binária (X2)
+```{r echo=TRUE, message=TRUE, warning=FALSE, paged.print=FALSE}
+# Variável binária
+## Supondo ser o sexo do indivíduo
+## M=1; F=2
+sexo<-sample(c(1,2),n,replace = T)
+
+# Quantitativa
+## Supondo ser o IMC da pessoa
+## https://www.scielosp.org/article/rpsp/1998.v3n3/164-173/
+## Lembrar que a variável quantitativa criada tem correlação com a biária, apesar da média entre homens e mulheres serem próximas
+imc<-vector(length = n)
+# Mulheres
+imc[sexo==1]<-rnorm(n = sum(sexo==1),mean = 22.3,sd = 3.5)
+summary(imc[sexo==1])
+# Homens
+imc[sexo==2]<-rnorm(n = sum(sexo==2),mean = 22.6,sd = 3.5)
+summary(imc[sexo==2])
+
+# Quantitativa sem dependência
+## Supondo ser o concentração de glicose no sangue em mg/dL
+glu<-rnorm(n = n,mean = 80,sd = 10)
+summary(glu)
+
+### Gerar fenótipos quantitativos para o Loco 1
+p[1]
+#Gerar dados de fenótipos pela Mistura de Normais para um único loco
+#ya: marcador com efeito aditivo “a” (uniloco)
+#yad: marcador com efeito aditivo e de dominância, “a” e “d” (uniloco)
+#miaa =mi-a; miAa=mi+d; miAA=mi+a 
+#tal que: a=(miAA-miaa)/2  e  d = miAa - (miAA + miaa)/2
+#mi=(miaa+miAA)/2
+
+# Modelo1: Efeito aditivo de G1 e efeito de X1
+gera.phen <- function (loco,var,ef){
+  y <- matrix(NA,n,1)
+  for(i in 1:n){
+    if (loco[i] == 0) y[i,]<- rnorm(1,mi-a+var[i]*ef,s2)
+    if (loco[i] == 1) y[i,]<- rnorm(1,mi+d+var[i]*ef,s2)
+    if (loco[i] == 2) y[i,]<- rnorm(1,mi+a+var[i]*ef,s2)}
+  cbind(loco,y)
+}
+mi=165
+a=15
+d=0
+ef=5
+s2=8
+set.seed(988)
+phen1 <- gera.phen(xg[,1],glu,ef)
+head(phen1)
+summary(lm(phen1[,2]~xg[,1]+glu))
+
+# Modelo2: Efeito aditivo de G1 e efeito de X2
+
+mi=165
+a=15
+d=0
+ef=12
+s2=8
+set.seed(988)
+phen2 <- gera.phen(xg[,1],sexo,ef)
+head(phen2)
+summary(lm(phen2[,2]~xg[,1]+sexo))
+
+#  Modelo3: Efeito aditivo e de dominância de G1 e de G2 com as interações
+
+### Gerar fenótipo com efeito de interação entre locos SNP3 e SNP4
+### Gerar dados de fenótipos pela Mistura de Normais para dois locos
+### Modelo com efeitos aditivos dos dois locos, “aL1” e “aL2”, 
+### e efeito de interação aditivo*aditivo (“aL1aL2”) (modelo biloco)
+
+#parâmetros fixados
+mi=165
+aL1=15
+dL1=8
+aL2=10
+dL2=4.5
+aL1aL2= 20
+aL1dL2=2
+dL1aL2=7
+dL1dL2=20
+s2=25
+
+#variáveis
+xaL1<-Recode(xg[,1], "0=(-1);1=0;2=1")
+xdL1<-Recode(xg[,1], "0=0;1=1;2=0")
+xaL2<-Recode(xg[,2], "0=(-1);1=0;2=1", as.factor=FALSE)
+xdL2<-Recode(xg[,2], "0=0;1=1;2=0", as.factor=FALSE)
+
+gera.phenL1L2 <- function (xaL1,xdL1,xaL2,xdL2){
+  y <- matrix (NA,n,1)
+  for(i in 1:n){
+    y[i]<- rnorm(1,mi + 
+                   aL1*xaL1[i]+dL1*xdL1[i]+
+                   aL2*xaL2[i]+dL2*xdL2[i]+
+                   aL1aL2*(xaL1[i]*xaL2[i])+
+                   aL1dL2*(xaL1[i]*xdL2[i])+
+                   dL1aL2*(xdL1[i]*xaL2[i])+
+                   dL1dL2*(xdL1[i]*xdL2[i]),s2)
+  }
+  return(y)
+}
+
+set.seed(998877)
+y12<- gera.phenL1L2(xaL1,xdL1,xaL2,xdL2)
+head(y12)
+summary(lm(y12~xaL1*xdL1*xaL2*xdL2))
+```
+
+### Gerar uma variável categórica (1=D e 0=ND) a partir do fenótipo quantitativo: estabeleça um ponto de corte para a categorização.
+```{r echo=TRUE, message=TRUE, warning=FALSE, paged.print=FALSE}
+# M1
+phen1d<-phen1[,2]
+phen1d[phen1[,2]>=median(phen1[,2])]<-1
+phen1d[phen1[,2]<median(phen1[,2])]<-0
+
+# M2
+phen2d<-phen2[,2]
+phen2d[phen2[,2]>=median(phen2[,2])]<-1
+phen2d[phen2[,2]<median(phen2[,2])]<-0
+
+# M3
+y12d<-y12
+y12d[y12>=median(y12)]<-1
+y12d[y12<median(y12)]<-0
+```
+### Modelagens
+#### Ajustar modelos de ANOVA e/ou regressão na análise do fenótipo quantitativo
+```{r echo=TRUE, message=TRUE, warning=FALSE, paged.print=FALSE}
+
+summary(lm(phen1[,2]~xg[,1]+glu))
+anova(lm(phen1[,2]~xg[,1]+glu))
+
+summary(lm(phen2[,2]~xg[,1]+sexo))
+anova(lm(phen2[,2]~xg[,1]+sexo))
+
+summary(lm(y12~xaL1*xdL1*xaL2*xdL2))
+anova(lm(y12~xaL1*xdL1*xaL2*xdL2))
+```
+
+#### Ajustar modelos de regressão logística na análise do fenótipo binário
+#### Considerar modelos Unilocos e Munltilocos (Bilocos, Seleção de variáveis)
+#### Construir Gráficos Manhattan para modelos SEM e COM efeitos de covariáveis.
+
+
